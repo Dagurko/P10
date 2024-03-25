@@ -97,6 +97,7 @@ int doCopy(CopyArgs* args)
                 close(src_fd);
                 close(dest_fd);
                 return -1;
+			}
             offset += bytes_written;
             if (lseek(dest_fd, offset, SEEK_SET) == -1) {
                 perror("Failed to seek in destination file");
