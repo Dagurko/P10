@@ -1,7 +1,7 @@
 /* 
- * Group number (on canvas): xx
- * Student 1 name: xx 
- * Student 2 name: xx 
+ * Group number (on canvas): 109
+ * Student 1 name: Jonas Ingi Þórisson 
+ * Student 2 name: Dagur Kári Ólafsson
  */
 
 #define _POSIX_C_SOURCE 2
@@ -57,9 +57,91 @@ int doCopy(CopyArgs* args)
 		return -1;
 	}
 
-	// ----------------
-	// Copy the file.
-	// ----------------
+    int src_fd = open(args->from, O_RDONLY);
+    if (src_fd == -1) {
+        perror("Failed to open source file");
+        return -1;
+    }
 
-	return -1;
+    if (access(args->to, F_OK) == 0) {
+        fprintf(stderr, "Destination file already exists\n");
+        close(src_fd);
+        return -1;
+    }
+
+    int dest_fd = open(args->to, O_WRONLY | O_CREAT | O_EXCL, 0666);
+    if (dest_fd == -1) {
+        perror("Failed to create destination file");
+        close(src_fd);
+        return -1;
+    }
+
+    char buffer[args->blocksize];
+
+    ssize_t bytes_read, bytes_written;
+    off_t offset = 0;
+
+    while ((bytes_read = read(src_fd, buffer, args->blocksize)) > 0) {
+        int all_zeros = 1;
+        for (ssize_t i = 0; i < bytes_read; ++i) {
+            if (buffer[i] != 0) {
+                all_zeros = 0;
+                break;
+            }
+        }
+
+        if (!all_zeros) {
+            bytes_written = write(dest_fd, buffer, bytes_read);
+            if (bytes_written == -1) {
+                perror("Failed to write to destination file");
+                close(src_fd);
+                close(dest_fd);
+                return -1;
+            offset += bytes_written;
+            if (lseek(dest_fd, offset, SEEK_SET) == -1) {
+                perror("Failed to seek in destination file");
+                close(src_fd);
+                close(dest_fd);
+                return -1;
+            }
+        } else {
+            offset += bytes_read;
+            if (lseek(dest_fd, offset, SEEK_SET) == -1) {
+                perror("Failed to seek in destination file");
+                close(src_fd);
+                close(dest_fd);
+                return -1;
+            }
+        }
+    }
+
+    if (bytes_read == -1) {
+        perror("Error reading from source file");
+        close(src_fd);
+        close(dest_fd);
+        return -1;
+    }
+
+    // Retrieve source file permissions
+    struct stat statbuf;
+    if (stat(args->from, &statbuf) == -1) {
+        perror("Failed to get source file permissions");
+        close(src_fd);
+        close(dest_fd);
+        return -1;
+    }
+
+    // Set destination file permissions
+    if (fchmod(dest_fd, statbuf.st_mode) == -1) {
+        perror("Failed to set destination file permissions");
+        close(src_fd);
+        close(dest_fd);
+        return -1;
+    }
+
+    // Close files
+    close(src_fd);
+    close(dest_fd);
+
+    return 0;
 }
